@@ -7,16 +7,6 @@ var router = express.Router();
 
 const SHARED_KEY = 'SHAREDKEY';
 
-// http.concat('http://localhost:3300/assets/34', 
-// function (err, res, data) {
-//   if (err) throw err
-//   var parsed_data = JSON.parse(data.toString('utf8'));
-//   var decrypted_heartbeat = CryptoJS.AES.decrypt(parsed_data.heartbeat_token, SHARED_KEY);
-//   console.log(`decrypted heartbeat content = ${
-//     JSON.stringify(JSON.parse(decrypted_heartbeat.toString(CryptoJS.enc.Utf8)), null, 2)
-//   }`); 
-// })
-
 var session_storage = {};
 
 router.post('/heartbeat', function(req, res, next) {
@@ -32,7 +22,7 @@ router.post('/heartbeat', function(req, res, next) {
     if (session_storage[user_id] == undefined) session_storage[user_id] = {};
     if (session_storage[user_id].sessions == undefined) session_storage[user_id].sessions = {};
     if (session_storage[user_id].sessions[session_id]) {
-      if (activeSessionLimitExceeded(user_id, new_timestamp)) {
+      if (activeSessionLimitExceeded(user_id, session_id, new_timestamp)) {
         respondActiveSessionLimitExceeded(res);
         return;
       } else session_id = uuid();
@@ -43,6 +33,7 @@ router.post('/heartbeat', function(req, res, next) {
       asset_id: heartbeat_data.asset_id,
       repeat_period: heartbeat_data.repeat_period,
       time_offset: heartbeat_data.time_offset,
+      started_at: new_timestamp,
       timestamp: new_timestamp,
       progress: req.body.progress
     }
@@ -60,7 +51,7 @@ router.post('/heartbeat', function(req, res, next) {
       return;
     }
 
-    if (activeSessionLimitExceeded(user_id, new_timestamp)) {
+    if (activeSessionLimitExceeded(user_id, session_id, new_timestamp)) {
       respondActiveSessionLimitExceeded(res);
       return;
     }
@@ -136,19 +127,28 @@ function decryptAEStoJSON(cipher) {
   return JSON.parse(data.toString(CryptoJS.enc.Utf8));
 }
 
-function activeSessionLimitExceeded(user_id, new_timestamp) {
+function activeSessionLimitExceeded(user_id, current_session_id, new_timestamp) {
   var max_allowed_sessions = session_storage[user_id].max_allowed_sessions
-  var active_sessions = Object.keys(session_storage[user_id].sessions)
+  var sessions = session_storage[user_id].sessions
+  var active_session_ids = Object.keys(sessions)
     .filter(function(session_id) {
-      var session = session_storage[user_id].sessions[session_id];
+      var session = sessions[session_id];
       return !timeExceeded(session.timestamp, session.repeat_period,
          session.time_offset, new_timestamp);
-    }
-  ).length
+    }).sort(compareSessionsByCreatedAt(sessions))
 
-  console.log('Active sessions:', active_sessions);
+  return active_session_ids.indexOf(current_session_id) >= max_allowed_sessions;
+}
 
-  return active_sessions > max_allowed_sessions;
+function compareSessionsByCreatedAt(sessions) {
+  return function(session_id_1, session_id_2) {
+    var time_1 = (new Date(sessions[session_id_1].started_at)).getTime();
+    var time_2 = (new Date(sessions[session_id_2].started_at)).getTime();
+
+    if (time_1 < time_2) return -1;
+    if (time_1 > time_2) return 1;
+    return 0;
+  }
 }
 
 function encryptAES(data) {
