@@ -137,7 +137,8 @@ function activeSessionLimitExceeded(user_id, current_session_id, new_timestamp) 
          session.time_offset, new_timestamp);
     }).sort(compareSessionsByCreatedAt(sessions))
 
-  return active_session_ids.indexOf(current_session_id) >= max_allowed_sessions;
+  return active_session_ids.indexOf(current_session_id) >= max_allowed_sessions || 
+    active_session_ids.length > +max_allowed_sessions + +SESSION_LIMIT_OFFSET;
 }
 
 function compareSessionsByCreatedAt(sessions) {
