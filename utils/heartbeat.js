@@ -1,5 +1,6 @@
 var uuid = require('uuid/v4');
 var cryptoAES = require('./cryptoAES');
+var logger = require('./logger');
 
 const SHARED_KEY = process.env.SHARED_KEY || 'SHAREDKEY';
 
@@ -12,14 +13,19 @@ function processRequest(req, res, storage) {
 }
 
 function processHeartbeatData(heartbeat_data, storage, req, res) {
-  return function (userSessionData) {
+  return function (user_session_data) {
     var user_id = heartbeat_data.user_id;
     var session_id = heartbeat_data.session_id;
-    var new_timestamp = (new Date()).toISOString();
-    var session_limit = userSessionData.session_limit;
-    var checking_threshold = userSessionData.checking_threshold;
-    var sessions_edge = userSessionData.sessions_edge;
-    var sessions = userSessionData.sessions;
+    var new_timestamp = getTimeNowISOString();
+    var session_limit = user_session_data.session_limit;
+    var checking_threshold = user_session_data.checking_threshold;
+    var sessions_edge = user_session_data.sessions_edge;
+    var sessions = user_session_data.sessions;
+
+    logger.verbose('User session data', {
+      user_session_data: user_session_data,
+      new_timestamp: new_timestamp
+    });
 
     if (heartbeatDataFromBackend(heartbeat_data)) {
       session_limit = heartbeat_data.session_limit;
@@ -28,9 +34,16 @@ function processHeartbeatData(heartbeat_data, storage, req, res) {
       storage.setSessionLimit(user_id, heartbeat_data.session_limit);
       storage.setCheckingThreshold(user_id, heartbeat_data.checking_threshold);
       storage.setSessionsEdge(user_id, heartbeat_data.sessions_edge);
+
+      logger.verbose('Received heartbeat data from backend', {
+        session_limit: session_limit,
+        checking_threshold: checking_threshold,
+        sessions_edge: sessions_edge
+      });
     }
 
     sessions = clearAndGetActiveSessions(sessions, storage, heartbeat_data, new_timestamp);
+    logger.verbose('Active sessions', sessions);
 
     if (sessionLimitExceeded(sessions, session_id,
         session_limit, checking_threshold, sessions_edge)) {
@@ -46,6 +59,7 @@ function processHeartbeatData(heartbeat_data, storage, req, res) {
     new_heartbeat_data.timestamp = new_timestamp;
 
     if (needsToCreateNewSession(session_id, sessions, heartbeat_data, new_timestamp)) {
+      logger.verbose('Creating a new session');
       if (!heartbeatDataFromBackend(heartbeat_data)) session_id = uuid();
       session_config.started_at = new_timestamp;
       new_heartbeat_data.started_at = new_timestamp;
@@ -54,13 +68,30 @@ function processHeartbeatData(heartbeat_data, storage, req, res) {
     }
 
     var heartbeat_response = createHeartbeatResponse(session_id, new_heartbeat_data);
-
+    logger.verbose('New heartbeat response', heartbeat_response);
 
     storage.setSession(user_id, session_id, session_config);
-    if (!!req.body.progress) storage.updateProgress(user_id, heartbeat_data.asset_id, req.body.progress);
+    logger.verbose('Set session', {
+      user_id: user_id,
+      session_id: session_id,
+      session_config: session_config
+    })
+
+    if (!!req.body.progress) {
+      storage.updateProgress(user_id, heartbeat_data.asset_id, req.body.progress);
+      logger.verbose('Updated progress', {
+        user_id: user_id,
+        asset_id: heartbeat_data.asset_id,
+        progress: req.body.progress
+      })
+    }
 
     res.status(200).json(heartbeat_response);
   }
+}
+
+function getTimeNowISOString() {
+  return (new Date()).toISOString();
 }
 
 
@@ -80,6 +111,7 @@ function clearAndGetActiveSessions(sessions, storage, heartbeat_data, new_timest
       active_sessions[session_id] = session;
     } else {
       storage.deleteSession(heartbeat_data.user_id, session_id);
+      logger.verbose('Deleted session', {user_id: heartbeat_data.user_id, session_id: session_id});
     }
   }
 
@@ -93,9 +125,17 @@ function sessionLimitExceeded(sessions, session_id, session_limit,
     .sort(compareSessionsByStartedAt(sessions));
 
   let sessionsEdgeExceeded = Object.keys(sessions).length > +sessions_edge;
-  let sessionLimitExceeded = session_ids.indexOf(session_id) >= session_limit;
+  let sessionOverLimit = session_ids.indexOf(session_id) >= session_limit;
 
-  return sessionsEdgeExceeded || sessionLimitExceeded;
+  let sessionLimitExceeded = sessionsEdgeExceeded || sessionOverLimit
+  if (sessionLimitExceeded) {
+    logger.verbose('Session limit exceeded', {
+      sessionsEdgeExceeded: sessionLimitExceeded,
+      sessionOverLimit: sessionOverLimit
+    });
+  }
+
+  return sessionsEdgeExceeded || sessionOverLimit;
 }
 
 function checkingThresholdSatisfied(sessions, checking_threshold) {
@@ -133,10 +173,27 @@ function createHeartbeatResponse(session_id, heartbeat_data) {
 function needsToCreateNewSession(session_id, sessions, heartbeat_data, new_timestamp) {
   let session = sessions[session_id];
 
-  return heartbeatDataFromBackend(heartbeat_data) ||
-    sessionMissing(session_id, sessions) ||
-    heartbeatNotExpected(session.timestamp, heartbeat_data.timestamp) ||
-    heartbeatReceivedTooEarly(session.timestamp, new_timestamp, heartbeat_data.heartbeat_cycle);
+  let heartbeat_data_from_backend = heartbeatDataFromBackend(heartbeat_data);
+  let session_missing = sessionMissing(session_id, sessions);
+  let heartbeat_not_expected = session ?
+    heartbeatNotExpected(session.timestamp, heartbeat_data.timestamp) : false;
+  let heartbeat_received_too_early = session ?
+    heartbeatReceivedTooEarly(session.timestamp, new_timestamp,
+    heartbeat_data.heartbeat_cycle) : false;
+
+  let needs_to_create_new_session = heartbeat_data_from_backend ||
+    session_missing || heartbeat_not_expected || heartbeat_received_too_early;
+
+  if (needs_to_create_new_session) {
+    logger.verbose('Needs to create a new session', {
+      heartbeat_data_from_backend: heartbeat_data_from_backend,
+      session_missing: session_missing,
+      heartbeat_not_expected: heartbeat_not_expected,
+      heartbeat_received_too_early: heartbeat_received_too_early
+    });
+  }
+
+  return needs_to_create_new_session;
 }
 
 function heartbeatDataFromBackend(heartbeat_data) {

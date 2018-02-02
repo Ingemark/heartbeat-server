@@ -18,6 +18,8 @@
     "serve-favicon": "~2.4.5",
     "simple-get": "^2.7.0",
     "uuid": "^3.1.0"
+    "winston": "^2.4.0",
+    "winston-daily-rotate-file": "^1.7.2"
   },
   "devDependencies": {
     "mocha": "^4.1.0"

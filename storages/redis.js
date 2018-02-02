@@ -1,6 +1,7 @@
 var redis = require('redis');
+var logger = require('../utils/logger');
 
-module.exports = function() {
+module.exports = function () {
   var redis_client_opts = {
     url: process.env.REDIS_URL || 'redis://127.0.0.1:6379',
     prefix: process.env.REDIS_NAMESPACE || ''
@@ -12,8 +13,12 @@ module.exports = function() {
   // Private functions
 
   function setCallbacks() {
-    client.on('error', err => { console.log(`Error ${err}`) });
-    client.on('connect', () => { console.log('Redis connected.'); })
+    client.on('error', err => {
+      logger.error('Redis error', err);
+    });
+    client.on('connect', () => {
+      logger.info('Redis connected!', redis_client_opts);
+    })
   }
 
   // Exported functions
@@ -27,14 +32,18 @@ module.exports = function() {
       multi_get.hgetall(`hb_sessions:${user_id}:active_sessions`);
 
       multi_get.exec(function (err, replies) {
-        if (err) reject(`Error while fetching user session data from Redis:\n${err}`);
+        if (err) {
+          let error_msg = 'Error while fetching user session data from Redis'
+          logger.error(error_msg, err);
+          reject({info: error_msg, error: err});
+        }
 
         let session_limit = replies[0];
         let checking_threshold = replies[1];
         let sessions_edge = replies[2];
         let sessions = replies[3];
 
-        if(!!sessions) {
+        if (!!sessions) {
           Object.keys(sessions).map((key, _) => {
             sessions[key] = JSON.parse(sessions[key]);
           });
