@@ -1,5 +1,5 @@
 module.exports = {
-    fetchUserSessionData: (user_id) => {},
+    fetchUserSessionData: () => {},
     setSession: () => {},
     setSessionLimit: () => {},
     setCheckingThreshold: () => {},

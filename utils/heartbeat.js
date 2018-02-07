@@ -197,8 +197,12 @@ function needsToCreateNewSession(session_id, sessions, heartbeat_data, new_times
 }
 
 function heartbeatDataFromBackend(heartbeat_data) {
-  return heartbeat_data.session_limit && heartbeat_data.checking_threshold;
+  return isDefined(heartbeat_data.session_limit) &&
+    isDefined(heartbeat_data.checking_threshold) &&
+    isDefined(heartbeat_data.sessions_edge);
 }
+
+var isDefined = (variable) => typeof variable !== 'undefined';
 
 function respondActiveSessionLimitExceeded(res) {
   res.status(412).json({error: 'You have exceeded the maximum allowed number of devices'});
