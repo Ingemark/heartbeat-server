@@ -61,7 +61,7 @@ describe('POST /heartbeat', function () {
       var spy_set_checking_threshold = spyStorage('setCheckingThreshold');
       var spy_set_sessions_edge = spyStorage('setSessionsEdge');
 
-      makeHeartbeatRequest(request_body, function (err, res) {
+      return makeHeartbeatRequest(request_body, function (response) {
         assert(spy_set_session_limit.withArgs(heartbeat_data.user_id,
           heartbeat_data.session_limit).calledOnce);
         assert(spy_set_checking_threshold.withArgs(heartbeat_data.user_id,
@@ -69,7 +69,6 @@ describe('POST /heartbeat', function () {
         assert(spy_set_sessions_edge.withArgs(heartbeat_data.user_id,
           heartbeat_data.sessions_edge).calledOnce);
       });
-
     });
 
     it('creates a new session and updates the progress', function () {
@@ -82,8 +81,8 @@ describe('POST /heartbeat', function () {
       stubStorage('fetchUserSessionData', user_session_data)
       var spy_set_session = spyStorage('setSession');
 
-      makeHeartbeatRequest(request_body, function (err, res) {
-        assert.equal(res.status, 200);
+      return makeHeartbeatRequest(request_body, function (response) {
+        assert.equal(response.status, 200);
         assert.equal(spy_set_session.args[0][1], heartbeat_data.session_id);
       });
 
@@ -107,11 +106,11 @@ describe('POST /heartbeat', function () {
       var spy_set_session = spyStorage('setSession');
       var spy_update_progress = spyStorage('updateProgress');
 
-      makeHeartbeatRequest(request_body, function (err, res) {
+      return makeHeartbeatRequest(request_body, function (response) {
         assert.equal(spy_set_session.args[0][2].hit_counter, 2);
         assert.sameOrderedMembers(spy_update_progress.args[0], [heartbeat_data.user_id,
           heartbeat_data.asset_id, request_body.progress]);
-        assert.equal(res.status, 200);
+        assert.equal(response.status, 200);
       });
     });
 
@@ -129,11 +128,12 @@ describe('POST /heartbeat', function () {
 
 
 function makeHeartbeatRequest(request_body, callback) {
-  chai.request(app)
+  return chai.request(app)
     .post('/heartbeat')
     .type('application/json')
     .send(request_body)
-    .end(callback);
+    .catch(callback)
+    .then(callback);
 }
 
 function getApp() {

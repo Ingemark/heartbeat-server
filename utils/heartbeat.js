@@ -60,7 +60,8 @@ function processHeartbeatData(heartbeat_data, storage, req, res) {
 
     if (needsToCreateNewSession(session_id, sessions, heartbeat_data, new_timestamp)) {
       logger.verbose('Creating a new session');
-      if (!heartbeatDataFromBackend(heartbeat_data)) session_id = uuid();
+      if (needsToSetNewSessionId(session_id, sessions, heartbeat_data, new_timestamp))
+        session_id = uuid();
       session_config.started_at = new_timestamp;
       new_heartbeat_data.started_at = new_timestamp;
     } else {
@@ -194,6 +195,11 @@ function needsToCreateNewSession(session_id, sessions, heartbeat_data, new_times
   }
 
   return needs_to_create_new_session;
+}
+
+function needsToSetNewSessionId(session_id, sessions, heartbeat_data, new_timestamp) {
+  return needsToCreateNewSession(session_id, sessions, heartbeat_data, new_timestamp) &&
+    !heartbeatDataFromBackend(heartbeat_data);
 }
 
 function heartbeatDataFromBackend(heartbeat_data) {
