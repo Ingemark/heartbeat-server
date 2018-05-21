@@ -15,7 +15,7 @@ const logger = new (winston.Logger)({
     new (winston.transports.Console)({
       timestamp: tsFormat,
       colorize: true,
-      level: process.env.DEV_LOG_LEVEL || 'info'
+      level: env === 'development' ? 'verbose' : 'info'
     }),
     new (require('winston-daily-rotate-file'))({
       filename: `${logDir}/-heartbeat.log`,

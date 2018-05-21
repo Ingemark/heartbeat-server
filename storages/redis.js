@@ -6,6 +6,8 @@ var redis_client_opts = {
   prefix: process.env.REDIS_NAMESPACE || ''
 }
 var client = redis.createClient(redis_client_opts);
+var postActionsBuffer = [];
+var self = this;
 
 setCallbacks();
 
@@ -86,6 +88,22 @@ function deleteSession(user_id, session_id) {
   client.hdel(`hb_sessions:${user_id}:active_sessions`, session_id);
 }
 
+function addPostAction(methodName, ...methodParams) {
+  methodParams.unshift(methodName);
+  postActionsBuffer.push(methodParams);
+}
+
+function executePostActions() {
+  for (var i in postActionsBuffer) {
+    var method = postActionsBuffer[i][0]
+    var params = postActionsBuffer[i].slice(1)
+
+    this[method].apply(this, params)
+  }
+
+  postActionsBuffer = []
+}
+
 module.exports = {
   fetchUserSessionData: fetchUserSessionData,
   setSession: setSession,
@@ -93,7 +111,7 @@ module.exports = {
   setCheckingThreshold: setCheckingThreshold,
   setSessionsEdge: setSessionsEdge,
   updateProgress: updateProgress,
-  deleteSession: deleteSession
+  deleteSession: deleteSession,
+  executePostActions: executePostActions,
+  addPostAction: addPostAction
 };
-
-
