@@ -27,7 +27,6 @@ describe('POST /heartbeat', function () {
   });
 
   describe('when heartbeat comes from backend', function () {
-
     beforeEach(function () {
       let heartbeat_cycle = 10;
       heartbeat_data = {
@@ -95,7 +94,7 @@ describe('POST /heartbeat', function () {
         sessions_edge: '15',
         sessions: {
           [heartbeat_data.session_id]: {
-            timestamp: moment(heartbeat_data.timestamp).add(12, 's').toISOString(),
+            timestamp: moment(heartbeat_data.timestamp).subtract(12, 's').toISOString(),
             hit_counter: 1,
             started_at: moment(heartbeat_data.timestamp).subtract(30, 's').toISOString()
           }
@@ -150,4 +149,20 @@ function stubStorage(functionName, user_session_data) {
 
 function spyStorage(functionName) {
   return sandbox.spy(storageMock, functionName);
+}
+
+
+function setUserSessionData(config) {
+  return {
+    session_limit: '1',
+    checking_threshold: '3',
+    sessions_edge: '15',
+    sessions: {
+      [heartbeat_data.session_id]: {
+        timestamp: moment(heartbeat_data.timestamp).add(12, 's').toISOString(),
+        hit_counter: 1,
+        started_at: moment(heartbeat_data.timestamp).subtract(30, 's').toISOString()
+      }
+    }
+  }
 }
