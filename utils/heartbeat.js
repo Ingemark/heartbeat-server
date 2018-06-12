@@ -12,7 +12,7 @@ function processRequest(req, res, storage) {
     .then(() => storage.executePostActions())
     .catch((errorMsg) => {
       storage.executePostActions();
-      console.log(errorMsg) ;
+      console.log(errorMsg);
     });
 }
 
@@ -22,14 +22,11 @@ function prepareHeartbeatData(heartbeatData, storage, req, res) {
       user_id: heartbeatData.user_id,
       session_id: heartbeatData.session_id,
       new_timestamp: getTimeNowISOString(),
-      session_limit: userSessionData.session_limit,
-      checking_threshold: userSessionData.checking_threshold,
-      sessions_edge: userSessionData.sessions_edge,
+      session_limit: heartbeatData.session_limit,
+      checking_threshold: heartbeatData.checking_threshold,
+      sessions_edge: heartbeatData.sessions_edge,
       sessions: userSessionData.sessions
     }
-
-    if (heartbeatDataFromBackend(heartbeatData))
-      updateGlobalSessionConfig(inputData, heartbeatData, storage);
 
     refreshActiveSessions(inputData, storage, heartbeatData);
     logger.verbose('Active sessions', inputData.sessions);
@@ -39,7 +36,7 @@ function prepareHeartbeatData(heartbeatData, storage, req, res) {
       return;
     }
 
-    var outputData = processOutputData(inputData, heartbeatData);
+    var outputData = processInputData(inputData, heartbeatData);
 
     storage.addPostAction('setSession', inputData.user_id,
       inputData.session_id, outputData.sessionConfig);
@@ -53,7 +50,7 @@ function prepareHeartbeatData(heartbeatData, storage, req, res) {
   }
 }
 
-function processOutputData(inputData, heartbeatData) {
+function processInputData(inputData, heartbeatData) {
   var sessionConfig = {
     timestamp: inputData.new_timestamp,
     hit_counter: getHitCounter(inputData.sessions, inputData.session_id) + 1
@@ -81,21 +78,6 @@ function processOutputData(inputData, heartbeatData) {
     sessionConfig: sessionConfig,
     heartbeatResponse: heartbeatResponse
   }
-}
-
-function updateGlobalSessionConfig(inputData, heartbeatData, storage) {
-  inputData.session_limit = heartbeatData.session_limit;
-  inputData.checking_threshold = heartbeatData.checking_threshold;
-  inputData.sessions_edge = heartbeatData.sessions_edge;
-  storage.addPostAction('setSessionLimit', inputData.user_id, inputData.session_limit);
-  storage.addPostAction('setCheckingThreshold', inputData.user_id, inputData.checking_threshold);
-  storage.addPostAction('setSessionsEdge', inputData.user_id, inputData.sessions_edge);
-
-  logger.verbose('Received heartbeat data from backend', {
-    session_limit: inputData.session_limit,
-    checking_threshold: inputData.checking_threshold,
-    sessions_edge: inputData.sessions_edge
-  });
 }
 
 function getTimeNowISOString() {
@@ -168,6 +150,9 @@ function createHeartbeatResponse(sessionId, heartbeatData) {
     asset_id: heartbeatData.asset_id,
     heartbeat_cycle: heartbeatData.heartbeat_cycle,
     cycle_upper_tolerance: heartbeatData.cycle_upper_tolerance,
+    session_limit: heartbeatData.session_limit,
+    checking_threshold: heartbeatData.checking_threshold,
+    sessions_edge: heartbeatData.sessions_edge,
     started_at: heartbeatData.started_at,
     timestamp: heartbeatData.timestamp
   }
@@ -175,44 +160,42 @@ function createHeartbeatResponse(sessionId, heartbeatData) {
   return { heartbeat_token: cryptoAES.encrypt(modifiedHeartbeatData, SHARED_KEY) };
 }
 
-function needsToCreateNewSession(session_id, sessions, heartbeat_data, new_timestamp) {
-  let session = sessions[session_id];
+function needsToCreateNewSession(sessionId, sessions, heartbeatData, newTimestamp) {
+  let session = sessions[sessionId];
 
-  let heartbeat_data_from_backend = heartbeatDataFromBackend(heartbeat_data);
-  let session_missing = sessionMissing(session_id, sessions);
-  let heartbeat_not_expected = session ?
-    heartbeatNotExpected(session.timestamp, heartbeat_data.timestamp) : false;
-  let heartbeat_received_too_early = session ?
-    heartbeatReceivedTooEarly(session.timestamp, new_timestamp,
-    heartbeat_data.heartbeat_cycle) : false;
+  let hbDataFromBackend = heartbeatDataFromBackend(heartbeatData);
+  let hbSessionMissing = sessionMissing(sessionId, sessions);
+  let hbNotExpected = session ?
+    heartbeatNotExpected(session.timestamp, heartbeatData.timestamp) : false;
+  let hbReceivedTooEarly = session ?
+    heartbeatReceivedTooEarly(session.timestamp, newTimestamp,
+    heartbeatData.heartbeat_cycle) : false;
 
-  let needs_to_create_new_session = heartbeat_data_from_backend ||
-    session_missing || heartbeat_not_expected || heartbeat_received_too_early;
+  let needsToCreateNewSession = hbDataFromBackend ||
+    hbSessionMissing || hbNotExpected || hbReceivedTooEarly;
 
-  if (needs_to_create_new_session) {
+  if (needsToCreateNewSession) {
     logger.verbose('Needs to create a new session', {
-      heartbeat_data_from_backend: heartbeat_data_from_backend,
-      session_missing: session_missing,
-      heartbeat_not_expected: heartbeat_not_expected,
-      heartbeat_received_too_early: heartbeat_received_too_early
+      heartbeat_data_from_backend: hbDataFromBackend,
+      session_missing: hbSessionMissing,
+      heartbeat_not_expected: hbNotExpected,
+      heartbeat_received_too_early: hbReceivedTooEarly
     });
   }
 
-  return needs_to_create_new_session;
+  return needsToCreateNewSession;
 }
 
-function needsToSetNewSessionId(session_id, sessions, heartbeat_data, new_timestamp) {
-  return needsToCreateNewSession(session_id, sessions, heartbeat_data, new_timestamp) &&
-    (!heartbeatDataFromBackend(heartbeat_data) ||
-        heartbeatDataFromBackend(heartbeat_data) &&
-          !sessionMissing(session_id, sessions)
+function needsToSetNewSessionId(sessionId, sessions, heartbeatData, newTimestamp) {
+  return needsToCreateNewSession(sessionId, sessions, heartbeatData, newTimestamp) &&
+    (!heartbeatDataFromBackend(heartbeatData) ||
+        heartbeatDataFromBackend(heartbeatData) &&
+          !sessionMissing(sessionId, sessions)
     );
 }
 
-function heartbeatDataFromBackend(heartbeat_data) {
-  return isDefined(heartbeat_data.session_limit) &&
-    isDefined(heartbeat_data.checking_threshold) &&
-    isDefined(heartbeat_data.sessions_edge);
+function heartbeatDataFromBackend(heartbeatData) {
+  return !isDefined(heartbeatData.started_at);
 }
 
 var isDefined = (variable) => typeof variable !== 'undefined';
@@ -221,21 +204,21 @@ function respondActiveSessionLimitExceeded(res) {
   res.status(412).json({error: 'You have exceeded the maximum allowed number of devices'});
 }
 
-function sessionMissing(session_id, sessions) {
-  return sessions[session_id] == null;
+function sessionMissing(sessionId, sessions) {
+  return sessions[sessionId] == null;
 }
 
-function heartbeatNotExpected(timestamp, received_timestamp) {
-  return (new Date(timestamp)).getTime() != (new Date(received_timestamp)).getTime();
+function heartbeatNotExpected(timestamp, receivedTimestamp) {
+  return (new Date(timestamp)).getTime() != (new Date(receivedTimestamp)).getTime();
 }
 
-function heartbeatReceivedTooEarly(timestamp, new_timestamp, heartbeat_cycle) {
-  return ((new Date(new_timestamp)).getTime() - (new Date(timestamp)).getTime()) < +heartbeat_cycle * 1000;
+function heartbeatReceivedTooEarly(timestamp, newTimestamp, heartbeatCycle) {
+  return ((new Date(newTimestamp)).getTime() - (new Date(timestamp)).getTime()) < +heartbeatCycle * 1000;
 }
 
-function timeExceeded(timestamp, heartbeat_cycle, cycle_upper_tolerance, time_now) {
+function timeExceeded(timestamp, heartbeatCycle, cycleUpperTolerance, timeNow) {
   return new Date(new Date(timestamp).getTime() +
-      +heartbeat_cycle * 1000 + +cycle_upper_tolerance * 1000) < new Date(time_now);
+      +heartbeatCycle * 1000 + +cycleUpperTolerance * 1000) < new Date(timeNow);
 }
 
 module.exports = {
