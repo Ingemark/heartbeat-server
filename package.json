@@ -3,8 +3,8 @@
   "version": "0.0.0",
   "private": true,
   "scripts": {
-    "startProd": "node ./bin/www",
-    "start": "./node_modules/nodemon/bin/nodemon.js ./bin/www",
+    "start": "node ./bin/www",
+    "startDev": "./node_modules/nodemon/bin/nodemon.js ./bin/www",
     "test": "mocha --recursive --exit"
   },
   "dependencies": {
