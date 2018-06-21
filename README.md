@@ -122,3 +122,31 @@ Response body:
 
 ### Backend specification
 
+Client sends request to backend in order to get resource URL of playable content. Backend then forms `heartbeat_data`.
+
+```
+heartbeat_data = {
+    "user_id": 13, 
+    "asset_id": 14,
+    "session_id": "f1f2092-8469-4b96-b241-b1c25e2cc5f1",
+    "heartbeat_cycle": 3,
+    "cycle_upper_tolerance": 2,
+    "timestamp": "2018-06-05T16:16:14.418Z",
+    "session_limit": 1,
+    "checking_threshold": 3,
+    "sessions_edge": 10
+}
+```
+
+`heartbeat_data` consists of:
+- `user_id` - represents user identifier in database.
+- `asset_id` - resource identifier in database.
+- `session_id` - session identifier in `UUID/v4` format. create new `session_id` on every request.
+- `heartbeat_cycle` - number of seconds which represents a period of sending heartbeat requests
+- `cycle_upper_tolerance` - number of seconds which represents time tolerance on receiving heartbeat request after time set in `heartbeat_cycle`.
+- `timestamp` - time of sending heartbeat in ISO 8601 format (Combined date and time representation).
+- `session_limit` - number of allowed parallel active sessions for particular user.
+- `checking_threshold` - number of heartbeats in current session after which the system starts to check active session limit. used for tracking only real active sessions and ignoring ones that have only been started.
+- `sessions_edge` - maximum number of active sessions that can persist in local in-memory database. used for preventing cache overfill while spamming heartbeat requests.
+
+After forming `heartbeat_data`, it has to be encryptis set on heartbeat servered (AES CBC mode) into `heartbeat_token` with the same key that heartbeat server uses for encrypting `heartbeat_data`.
