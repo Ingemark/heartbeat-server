@@ -4,21 +4,20 @@ var cryptoAES = require('../../utils/cryptoAES')
   , faker = require('faker')
   , moment = require('moment')
   , sinon = require('sinon')
-  , storageMock = require('../../storages/mock')
-  , uuid = require('uuid/v4');
+  , storageMock = require('../../storages/mock');
 
 chai.use(require('chai-http'));
 
 process.env.STORAGE = 'mock';
 process.env.DEV_LOG_LEVEL = 'verbose';
-var shared_key = process.env.SHARED_KEY = faker.internet.password(20);
+let shared_key = process.env.SHARED_KEY = faker.internet.password(20);
 
-var sandbox, clock, time_now;
+let sandbox, clock, time_now;
 
-var app = getApp();
+let app = getApp();
 
 describe('POST /heartbeat', function () {
-  var heartbeat_data, request_body;
+  let heartbeat_data, request_body;
 
   beforeEach(function () {
     sandbox = sinon.sandbox.create();
@@ -26,7 +25,116 @@ describe('POST /heartbeat', function () {
     clock = sinon.useFakeTimers((new Date(time_now)).getTime());
   });
 
-  describe('when heartbeat comes from backend', function () {
+  afterEach(function () {
+    sandbox.restore();
+    clock.restore();
+  });
+
+  it('returns 200 OK', function () {
+    let heartbeat_cycle = 10;
+    heartbeat_data = {
+      user_id: faker.random.number(1000),
+      asset_id: faker.random.number(1000),
+      session_id: faker.random.uuid(),
+      heartbeat_cycle: heartbeat_cycle,
+      cycle_upper_tolerance: 4,
+      timestamp: moment(time_now).toISOString(),
+      session_limit: 1,
+      checking_threshold: 3,
+      sessions_edge: 5
+    };
+
+    request_body = {
+      heartbeat_token: cryptoAES.encrypt(heartbeat_data, shared_key),
+      progress: faker.random.number(7200)
+    };
+
+    let user_session_data = {
+      sessions: {}
+    };
+    stubStorage('fetchUserSessionData', user_session_data);
+
+    return makeHeartbeatRequest(request_body, function (response) {
+      assert.equal(response.status, 200);
+      assert.equal(Object.keys(response.body).length, 1);
+      assert(response.body.hasOwnProperty('heartbeat_token'));
+    });
+  });
+
+  it('returns 412 Precondition Failed', function () {
+    let heartbeat_cycle = 10;
+    heartbeat_data = {
+      user_id: faker.random.number(1000),
+      asset_id: faker.random.number(1000),
+      session_id: faker.random.uuid(),
+      heartbeat_cycle: heartbeat_cycle,
+      cycle_upper_tolerance: 4,
+      timestamp: moment(time_now).toISOString(),
+      session_limit: 1,
+      checking_threshold: 3,
+      sessions_edge: 5
+    };
+
+    request_body = {
+      heartbeat_token: cryptoAES.encrypt(heartbeat_data, shared_key),
+      progress: faker.random.number(7200)
+    };
+
+    let user_session_data = {
+      sessions: {
+        [heartbeat_data.session_id]: {
+          timestamp: moment(heartbeat_data.timestamp).subtract(12, 's').toISOString(),
+          hit_counter: 5,
+          started_at: moment(heartbeat_data.timestamp).subtract(30, 's').toISOString()
+        },
+        [faker.random.uuid()]: {
+          timestamp: moment(heartbeat_data.timestamp).subtract(14, 's').toISOString(),
+          hit_counter: 3,
+          started_at: moment(heartbeat_data.timestamp).subtract(90, 's').toISOString()
+        }
+      }
+    };
+    stubStorage('fetchUserSessionData', user_session_data);
+
+    return makeHeartbeatRequest(request_body, function (response) {
+      assert.equal(response.status, 412);
+    });
+  });
+
+  it('returns 406 Not Acceptable', function () {
+    let heartbeat_cycle = 10;
+    heartbeat_data = {
+      user_id: faker.random.number(1000),
+      asset_id: faker.random.number(1000),
+      session_id: faker.random.uuid(),
+      heartbeat_cycle: heartbeat_cycle,
+      cycle_upper_tolerance: 4,
+      timestamp: moment(time_now).toISOString(),
+      session_limit: 1,
+      checking_threshold: 3,
+      sessions_edge: 5
+    };
+
+    request_body = {
+      heartbeat_token: cryptoAES.encrypt(heartbeat_data, 'not the same key as expected'),
+      progress: faker.random.number(7200)
+    };
+
+    let user_session_data = {
+      session_limit: null,
+      checking_threshold: null,
+      sessions_edge: null,
+      sessions: {}
+    };
+    stubStorage('fetchUserSessionData', user_session_data);
+
+    return makeHeartbeatRequest(request_body, function (response) {
+      assert.equal(response.status, 406);
+    });
+  });
+
+
+  describe.skip('when heartbeat comes from backend', function () {
     beforeEach(function () {
       let heartbeat_cycle = 10;
       heartbeat_data = {
@@ -39,7 +147,7 @@ describe('POST /heartbeat', function () {
         session_limit: 1,
         checking_threshold: 3,
         sessions_edge: 5
-      }
+      };
 
       request_body = {
         heartbeat_token: cryptoAES.encrypt(heartbeat_data, shared_key),
@@ -78,13 +186,12 @@ describe('POST /heartbeat', function () {
         sessions: {}
       }
       stubStorage('fetchUserSessionData', user_session_data)
-      var spy_set_session = spyStorage('setSession');
+      var spy_set_session = spyStorage('addPostAction');
 
-      return makeHeartbeatRequest(request_body, function (response) {
+      makeHeartbeatRequest(request_body, function (response) {
         assert.equal(response.status, 200);
-        assert.equal(spy_set_session.args[0][1], heartbeat_data.session_id);
+        assert.equal(spy_set_session.args[0][2], heartbeat_data.session_id);
       });
-
     });
 
     it('updates the session', function () {
@@ -115,14 +222,11 @@ describe('POST /heartbeat', function () {
 
   });
 
-  describe('when heartbeat comes from heartbeat server', function () {
+  describe.skip('when heartbeat comes from heartbeat server', function () {
 
   });
 
-  afterEach(function () {
-    sandbox.restore();
-    clock.restore();
-  });
+
 });
 
 
@@ -131,8 +235,8 @@ function makeHeartbeatRequest(request_body, callback) {
     .post('/heartbeat')
     .type('application/json')
     .send(request_body)
-    .catch(callback)
-    .then(callback);
+    .then(callback)
+    .catch(callback);
 }
 
 function getApp() {

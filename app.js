@@ -1,13 +1,14 @@
 var express = require('express');
-var logger = require('morgan');
+var morganLogger = require('morgan');
 var bodyParser = require('body-parser');
 
 // Custom routes
 var heartbeat = require('./routes/heartbeat');
 
+var logger = require('./utils/logger');
 var app = express();
 
-app.use(logger('dev'));
+app.use(morganLogger('dev'));
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: false }));
 
@@ -22,13 +23,11 @@ app.use(function(req, res, next) {
 
 // error handler
 app.use(function(err, req, res, next) {
-  // set locals, only providing error in development
-  res.locals.message = err.message;
-  console.log(`Error ${err.stack}`)
-  res.locals.error = req.app.get('env') === 'development' ? err : {};
+  let status = err.status || 500;
+  if (status == 500) logger.error(err.stack);
 
   // render the error page
-  res.status(err.status || 500);
+  res.status(status);
   res.send();
 });
 

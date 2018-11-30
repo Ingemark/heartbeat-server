@@ -1,19 +1,21 @@
 var uuid = require('uuid/v4');
-var cryptoAES = require('./cryptoAES');
-var logger = require('./logger');
+var cryptoAES = require('../utils/cryptoAES');
+var logger = require('../utils/logger');
 
 const SHARED_KEY = process.env.SHARED_KEY || 'SHAREDKEY';
 
 function processRequest(req, res, storage) {
-  var heartbeat_data = cryptoAES.decryptToJSON(req.body.heartbeat_token, SHARED_KEY);
+  try {
+    var heartbeat_data = cryptoAES.decryptToJSON(req.body.heartbeat_token, SHARED_KEY);
+  } catch {
+    respondNotAcceptable(res);
+    return;
+  }
 
   storage.fetchUserSessionData(heartbeat_data.user_id)
     .then(prepareHeartbeatData(heartbeat_data, storage, req, res))
-    .then(() => storage.executePostActions())
-    .catch((errorMsg) => {
-      storage.executePostActions();
-      console.log(errorMsg);
-    });
+    .catch((errorMsg) => console.log(errorMsg))
+    .finally(() => storage.executePostActions());
 }
 
 function prepareHeartbeatData(heartbeatData, storage, req, res) {
@@ -114,10 +116,10 @@ function sessionLimitExceeded(inputData) {
   let sessionsEdgeExceeded = Object.keys(inputData.sessions).length > +inputData.sessions_edge;
   let sessionOverLimit = sessionIds.indexOf(inputData.session_id) >= +inputData.session_limit;
 
-  let sessionLimitExceeded = sessionsEdgeExceeded || sessionOverLimit
+  let sessionLimitExceeded = sessionsEdgeExceeded || sessionOverLimit;
   if (sessionLimitExceeded) {
     logger.verbose('Session limit exceeded', {
-      sessionsEdgeExceeded: sessionLimitExceeded,
+      sessionsEdgeExceeded: sessionsEdgeExceeded,
       sessionOverLimit: sessionOverLimit
     });
   }
@@ -201,7 +203,11 @@ function heartbeatDataFromBackend(heartbeatData) {
 var isDefined = (variable) => typeof variable !== 'undefined';
 
 function respondActiveSessionLimitExceeded(res) {
-  res.status(412).json({error: 'You have exceeded the maximum allowed number of devices'});
+  res.status(412).send({error: 'You have exceeded the maximum allowed number of devices'});
+}
+
+function respondNotAcceptable(res) {
+  res.status(406).send({error: 'Heartbeat token is not valid.'});
 }
 
 function sessionMissing(sessionId, sessions) {

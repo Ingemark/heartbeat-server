@@ -1,9 +1,7 @@
 module.exports = {
-    fetchUserSessionData: () => {},
-    setSession: () => {},
-    setSessionLimit: () => {},
-    setCheckingThreshold: () => {},
-    setSessionsEdge: () => {},
-    updateProgress: () => {},
-    deleteSession: () => {}
-}
+  fetchUserSessionData: () => {},
+  updateProgress: () => {},
+  deleteSession: () => {},
+  addPostAction: () => {},
+  executePostActions: () => {}
+};

@@ -1,5 +1,5 @@
 var express = require('express');
-var Heartbeat = require('../utils/heartbeat');
+var Heartbeat = require('../services/heartbeat');
 var logger = require('../utils/logger');
 
 if (process.env.STORAGE) {
