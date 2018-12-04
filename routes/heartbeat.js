@@ -12,9 +12,15 @@ if (process.env.STORAGE) {
 var router = express.Router();
 
 // POST /heartbeat
-router.post('/heartbeat', function (req, res) {
+router.post('/heartbeat', async function (req, res) {
+  let hb_request = {
+    body: req.body
+  };
+
+  let hb_response = await Heartbeat.processRequest(hb_request, storageImpl);
+
   res.set('Content-Type', 'application/json');
-  Heartbeat.processRequest(req, res, storageImpl);
+  res.status(hb_response.status).send(hb_response.body);
 });
 
 module.exports = router;

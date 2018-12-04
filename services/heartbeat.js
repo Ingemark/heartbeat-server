@@ -4,23 +4,26 @@ var logger = require('../utils/logger');
 
 const SHARED_KEY = process.env.SHARED_KEY || 'SHAREDKEY';
 
-function processRequest(req, res, storage) {
+function processRequest(request, storage) {
+  let heartbeat_data;
   try {
-    var heartbeat_data = cryptoAES.decryptToJSON(req.body.heartbeat_token, SHARED_KEY);
+    heartbeat_data = cryptoAES.decryptToJSON(request.body.heartbeat_token, SHARED_KEY);
   } catch {
-    respondNotAcceptable(res);
-    return;
+    return notAcceptableResponse();
   }
 
-  storage.fetchUserSessionData(heartbeat_data.user_id)
-    .then(prepareHeartbeatData(heartbeat_data, storage, req, res))
+  return storage.fetchUserSessionData(heartbeat_data.user_id)
+    .then(processHeartbeatData(heartbeat_data, storage, request))
     .catch((errorMsg) => console.log(errorMsg))
-    .finally(() => storage.executePostActions());
+    .finally((heartbeat_response) => {
+      storage.executePostActions();
+      return heartbeat_response;
+    });
 }
 
-function prepareHeartbeatData(heartbeatData, storage, req, res) {
+function processHeartbeatData(heartbeatData, storage, request) {
   return function (userSessionData) {
-    var inputData = {
+    let inputData = {
       user_id: heartbeatData.user_id,
       session_id: heartbeatData.session_id,
       new_timestamp: getTimeNowISOString(),
@@ -28,27 +31,24 @@ function prepareHeartbeatData(heartbeatData, storage, req, res) {
       checking_threshold: heartbeatData.checking_threshold,
       sessions_edge: heartbeatData.sessions_edge,
       sessions: userSessionData.sessions
-    }
+    };
 
     refreshActiveSessions(inputData, storage, heartbeatData);
     logger.verbose('Active sessions', inputData.sessions);
 
-    if (sessionLimitExceeded(inputData)) {
-      respondActiveSessionLimitExceeded(res);
-      return;
-    }
+    if (sessionLimitExceeded(inputData)) return activeSessionLimitExceededResponse();
 
-    var outputData = processInputData(inputData, heartbeatData);
+    let outputData = processInputData(inputData, heartbeatData);
 
     storage.addPostAction('setSession', inputData.user_id,
       inputData.session_id, outputData.sessionConfig);
 
-    if (!!req.body.progress) {
+    if (!!request.body.progress) {
       storage.addPostAction('updateProgress', inputData.user_id,
-        heartbeatData.asset_id, req.body.progress);
+        heartbeatData.asset_id, request.body.progress);
     }
 
-    res.json(outputData.heartbeatResponse);
+    return successfulResponse(outputData.heartbeatResponse);
   }
 }
 
@@ -200,15 +200,41 @@ function heartbeatDataFromBackend(heartbeatData) {
   return !isDefined(heartbeatData.started_at);
 }
 
-var isDefined = (variable) => typeof variable !== 'undefined';
+let isDefined = (variable) => typeof variable !== 'undefined';
 
-function respondActiveSessionLimitExceeded(res) {
-  res.status(412).send({error: 'You have exceeded the maximum allowed number of devices'});
-}
+let successfulResponse = function(response_body) {
+  return {
+    status: 200,
+    body: response_body
+  }
+};
 
-function respondNotAcceptable(res) {
-  res.status(406).send({error: 'Heartbeat token is not valid.'});
-}
+let activeSessionLimitExceededResponse = function () {
+  return {
+    status: 412,
+    body: {
+      error: 'You have exceeded the maximum allowed number of devices.'
+    }
+  }
+};
+
+let notAcceptableResponse = function () {
+  return {
+    status: 406,
+    body: {
+      error: 'Heartbeat token is not valid.'
+    }
+  }
+};
+
+
+// function respondActiveSessionLimitExceeded(res) {
+//   res.status(412).send({});
+// }
+//
+// function respondNotAcceptable(res) {
+//   res.status(406).send({error: 'Heartbeat token is not valid.'});
+// }
 
 function sessionMissing(sessionId, sessions) {
   return sessions[sessionId] == null;
