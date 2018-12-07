@@ -2,6 +2,8 @@ var express = require('express');
 var Heartbeat = require('../services/heartbeat');
 var logger = require('../utils/logger');
 
+const SHARED_KEY = process.env.SHARED_KEY || 'SHAREDKEY';
+
 if (process.env.STORAGE) {
   var storageImpl = require(`../storages/${process.env.STORAGE}`);
 } else {
@@ -17,10 +19,14 @@ router.post('/heartbeat', async function (req, res) {
     body: req.body
   };
 
-  let hb_response = await Heartbeat.processRequest(hb_request, storageImpl);
+  let hb_response = await Heartbeat.processRequest(hb_request, storageImpl, currentTimeISOString(), SHARED_KEY);
 
   res.set('Content-Type', 'application/json');
   res.status(hb_response.status).send(hb_response.body);
 });
+
+function currentTimeISOString() {
+  return (new Date()).toISOString();
+}
 
 module.exports = router;

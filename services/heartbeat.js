@@ -2,26 +2,24 @@ var uuid = require('uuid/v4');
 var cryptoAES = require('../utils/cryptoAES');
 var logger = require('../utils/logger');
 
-const SHARED_KEY = process.env.SHARED_KEY || 'SHAREDKEY';
-
-function processRequest(request, storage) {
+function processRequest(request, storage, timeNowISOString, sharedKey) {
   let heartbeat_data;
   try {
-    heartbeat_data = cryptoAES.decryptToJSON(request.body.heartbeat_token, SHARED_KEY);
-  } catch {
+    heartbeat_data = cryptoAES.decryptToJSON(request.body.heartbeat_token, sharedKey);
+  } catch(_err) {
     return notAcceptableResponse();
   }
 
   return storage.fetchUserSessionData(heartbeat_data.user_id)
-    .then(processHeartbeatData(heartbeat_data, storage, request))
+    .then(processHeartbeatData(heartbeat_data, storage, request, sharedKey))
     .catch((errorMsg) => console.log(errorMsg))
-    .finally((heartbeat_response) => {
+    .then((heartbeat_response) => {
       storage.executePostActions();
       return heartbeat_response;
     });
 }
 
-function processHeartbeatData(heartbeatData, storage, request) {
+function processHeartbeatData(heartbeatData, storage, request, sharedKey) {
   return function (userSessionData) {
     let inputData = {
       user_id: heartbeatData.user_id,
@@ -38,7 +36,7 @@ function processHeartbeatData(heartbeatData, storage, request) {
 
     if (sessionLimitExceeded(inputData)) return activeSessionLimitExceededResponse();
 
-    let outputData = processInputData(inputData, heartbeatData);
+    let outputData = processInputData(inputData, heartbeatData, sharedKey);
 
     storage.addPostAction('setSession', inputData.user_id,
       inputData.session_id, outputData.sessionConfig);
@@ -52,7 +50,7 @@ function processHeartbeatData(heartbeatData, storage, request) {
   }
 }
 
-function processInputData(inputData, heartbeatData) {
+function processInputData(inputData, heartbeatData, sharedKey) {
   var sessionConfig = {
     timestamp: inputData.new_timestamp,
     hit_counter: getHitCounter(inputData.sessions, inputData.session_id) + 1
@@ -73,7 +71,7 @@ function processInputData(inputData, heartbeatData) {
     sessionConfig.started_at = heartbeatData.started_at;
   }
 
-  var heartbeatResponse = createHeartbeatResponse(inputData.session_id, newHeartbeatData);
+  var heartbeatResponse = createHeartbeatResponse(inputData.session_id, newHeartbeatData, sharedKey);
   logger.verbose('New heartbeat response', heartbeatResponse);
 
   return {
@@ -145,7 +143,7 @@ function compareSessionsByStartedAt(sessions) {
   }
 }
 
-function createHeartbeatResponse(sessionId, heartbeatData) {
+function createHeartbeatResponse(sessionId, heartbeatData, sharedKey) {
   var modifiedHeartbeatData = {
     user_id: heartbeatData.user_id,
     session_id: sessionId,
@@ -159,7 +157,7 @@ function createHeartbeatResponse(sessionId, heartbeatData) {
     timestamp: heartbeatData.timestamp
   }
 
-  return { heartbeat_token: cryptoAES.encrypt(modifiedHeartbeatData, SHARED_KEY) };
+  return { heartbeat_token: cryptoAES.encrypt(modifiedHeartbeatData, sharedKey) };
 }
 
 function needsToCreateNewSession(sessionId, sessions, heartbeatData, newTimestamp) {
@@ -226,15 +224,6 @@ let notAcceptableResponse = function () {
     }
   }
 };
-
-
-// function respondActiveSessionLimitExceeded(res) {
-//   res.status(412).send({});
-// }
-//
-// function respondNotAcceptable(res) {
-//   res.status(406).send({error: 'Heartbeat token is not valid.'});
-// }
 
 function sessionMissing(sessionId, sessions) {
   return sessions[sessionId] == null;

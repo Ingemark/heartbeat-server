@@ -1,6 +1,7 @@
 version: "3"
 services:
   web:
+    container_name: 'heartbeat_server'
     build: .
     env_file: .env
     environment:
@@ -11,5 +12,6 @@ services:
     depends_on:
       - redis_db
   redis_db:
+    container_name: 'heartbeat_server_redis'
     image: "redis:alpine"
     restart: always

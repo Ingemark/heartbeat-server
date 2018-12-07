@@ -8,7 +8,7 @@ function decryptToJSON(cipher, key) {
   let data = CryptoJS.AES.decrypt(cipher, key);
   try {
     return JSON.parse(data.toString(CryptoJS.enc.Utf8));
-  } catch {
+  } catch(_err) {
     throw new Error("Unable to decrypt heartbeat token.");
   }
 }

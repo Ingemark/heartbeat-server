@@ -35,8 +35,14 @@ npm run startProd
 ## Testing
 
 ```bash
-# run tests with mocha
+# run unit tests with mocha
 npm test
+```
+
+```bash
+# run integration tests
+npm run integrationTest; PASSED=$?
+echo $PASSED # 0 - success, 1 - fail
 ```
 
 ## Deployment
