@@ -6,17 +6,15 @@ services:
       - heartbeat_server_test
     volumes:
       - .:/tests:ro
-    command: mocha /tests/*.js
+      - ../../utils:/utils:ro
   heartbeat_server_test:
-    build: '../../.'
+    build: ../../.
     environment:
     - NODE_ENV=production
     - PORT=3000
     - STORAGE=redis
     - REDIS_URL=redis://heartbeat_server_redis_test:6379
     - SHARED_KEY=master_password
-    expose:
-    - '3000'
     depends_on:
     - heartbeat_server_redis_test
   heartbeat_server_redis_test:

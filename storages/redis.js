@@ -1,13 +1,13 @@
 var redis = require('redis');
 var logger = require('../utils/logger');
 
-var redis_client_opts = {
-  url: process.env.REDIS_URL || 'redis://127.0.0.1:6379',
-  prefix: process.env.REDIS_NAMESPACE || ''
-}
-var client = redis.createClient(redis_client_opts);
-var postActionsBuffer = [];
-var self = this;
+let redis_client_opts = {};
+redis_client_opts.url = process.env.REDIS_URL || 'redis://127.0.0.1:6379';
+if (process.env.PASSWORD) redis_client_opts.password = process.env.PASSWORD;
+if (redis_client_opts.prefix) redis_client_opts.prefix = process.env.REDIS_NAMESPACE;
+
+let client = redis.createClient(redis_client_opts);
+let postActionsBuffer = [];
 
 setCallbacks();
 
@@ -28,7 +28,7 @@ function fetchUserSessionData(user_id) {
   return new Promise((resolve, reject) => {
     client.hgetall(`hb_sessions:${user_id}:active_sessions`, function (err, response) {
       if (err) {
-        let error_msg = 'Error while fetching user session data from Redis'
+        let error_msg = 'Error while fetching user session data from Redis';
         logger.error(error_msg, err);
         reject({info: error_msg, error: err});
       }

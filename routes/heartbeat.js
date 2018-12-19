@@ -4,12 +4,13 @@ var logger = require('../utils/logger');
 
 const SHARED_KEY = process.env.SHARED_KEY || 'SHAREDKEY';
 
+let storageImpl;
 if (process.env.STORAGE) {
-  var storageImpl = require(`../storages/${process.env.STORAGE}`);
+  storageImpl = require(`../storages/${process.env.STORAGE}`);
 } else {
-  logger.error('Storage not set. Environmental variable STORAGE needs to ' +
-    'contain name of storage file inside /storages directory (without extension)');
-  process.exit(1);
+  logger.warn('Warning! Storage not set. Environmental variable STORAGE needs to ' +
+    'contain name of storage file inside /storages directory (without extension). Now using mock storage.');
+  storageImpl = require('../storages/mock');
 }
 var router = express.Router();
 

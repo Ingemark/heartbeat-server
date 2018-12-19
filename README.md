@@ -62,6 +62,12 @@ docker-compose up --build
 
 Heartbeat server will be ready on port specified in `PORT` variable inside `.env` file.
 
+### Simple standalone docker deployment with remote _redis_
+```bash
+docker build -t heartbeat_server .   
+docker run -d -e STORAGE=redis -e REDIS_URL='redis://192.168.18.95:4545' -e SHARED_KEY=asdfasdf -p 5555:3000 heartbeat_server:latest
+```
+
 ## Specification of other components
 
 Heartbeat server needs configured clients and backend server to work properly. 
@@ -70,7 +76,7 @@ Heartbeat server needs configured clients and backend server to work properly.
 
 ### Client specification
 
-The process starts with requesting resource URL from backend. Along with resource id, user authentication token and
+The process starts with requesting resource URL from backend. On client's request with resource id, user authentication token and
 other necessary data, backend responds with: `heartbeat_token`, `heartbeat_cycle` and `progress`.
 
 Client saves `heartbeat_token` in local storage and begins to reproduce the resource at position defined 
@@ -126,6 +132,17 @@ Response body:
 }
 ```
 
+Another negative response occurs when `heartbeat_token` cannot be parsed by heartbeat server which 
+responds with HTTP status code (406 Not Acceptable).
+
+```
+Status: 406 Not Acceptable
+Response body:
+{
+  "error": "Heartbeat token is not valid."
+}
+```
+
 ### Backend specification
 
 Client sends request to backend in order to get resource URL of playable content. Backend then forms `heartbeat_data`.
@@ -134,7 +151,6 @@ Client sends request to backend in order to get resource URL of playable content
 heartbeat_data = {
     "user_id": 13, 
     "asset_id": 14,
-    "session_id": "f1f2092-8469-4b96-b241-b1c25e2cc5f1",
     "heartbeat_cycle": 3,
     "cycle_upper_tolerance": 2,
     "timestamp": "2018-06-05T16:16:14.418Z",
@@ -145,14 +161,17 @@ heartbeat_data = {
 ```
 
 `heartbeat_data` consists of:
-- `user_id` - represents user identifier in database.
-- `asset_id` - resource identifier in database.
-- `session_id` - session identifier in `UUID/v4` format. create new `session_id` on every request.
-- `heartbeat_cycle` - number of seconds which represents a period of sending heartbeat requests
-- `cycle_upper_tolerance` - number of seconds which represents time tolerance on receiving heartbeat request after time set in `heartbeat_cycle`.
-- `timestamp` - time of sending heartbeat in ISO 8601 format (Combined date and time representation).
-- `session_limit` - number of allowed parallel active sessions for particular user.
-- `checking_threshold` - number of heartbeats in current session after which the system starts to check active session limit. used for tracking only real active sessions and ignoring ones that have only been started.
-- `sessions_edge` - maximum number of active sessions that can persist in local in-memory database. used for preventing cache overfill while spamming heartbeat requests.
 
-After forming `heartbeat_data`, it has to be encryptis set on heartbeat servered (AES CBC mode) into `heartbeat_token` with the same key that heartbeat server uses for encrypting `heartbeat_data`.
+* `user_id` - represents user identifier in database.
+* `asset_id` - playable resource identifier in database.
+* `heartbeat_cycle` - number of seconds which represents a period of sending heartbeat requests
+* `cycle_upper_tolerance` - number of seconds which represents time tolerance on receiving heartbeat request after time set in `heartbeat_cycle`.
+* `timestamp` - time of sending heartbeat in ISO 8601 format (Combined date and time representation).
+* `session_limit` - number of allowed parallel active sessions for particular user.
+* `checking_threshold` - number of heartbeats in current session after which the system starts to check active 
+session limit. used for tracking only real active sessions and ignoring ones that have only been started.
+* `sessions_edge` - maximum number of active sessions that can persist in local in-memory database. 
+used for preventing cache overfill while spamming heartbeat requests.
+
+After forming `heartbeat_data`, it has to be encrypted with AES (CBC mode) into `heartbeat_token` 
+with the same key that heartbeat server uses for encrypting `heartbeat_data`.

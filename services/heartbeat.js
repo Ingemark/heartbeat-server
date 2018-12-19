@@ -32,7 +32,7 @@ function processHeartbeatData(heartbeatData, storage, request, sharedKey) {
     };
 
     refreshActiveSessions(inputData, storage, heartbeatData);
-    logger.verbose('Active sessions', inputData.sessions);
+    logger.verbose('Active sessions', JSON.stringify(inputData.sessions));
 
     if (sessionLimitExceeded(inputData)) return activeSessionLimitExceededResponse();
 
@@ -60,19 +60,17 @@ function processInputData(inputData, heartbeatData, sharedKey) {
 
   if (needsToCreateNewSession(inputData.session_id, inputData.sessions,
       heartbeatData, inputData.new_timestamp)) {
-    logger.verbose('Creating a new session');
-    if (needsToSetNewSessionId(inputData.session_id, inputData.sessions,
-        heartbeatData, inputData.new_timestamp)) {
-      inputData.session_id = uuid();
-    }
+    inputData.session_id = uuid();
+    logger.verbose(`Creating new session with :session_id = '${inputData.session_id}'`);
+
     sessionConfig.started_at = inputData.new_timestamp;
     newHeartbeatData.started_at = inputData.new_timestamp;
   } else {
     sessionConfig.started_at = heartbeatData.started_at;
   }
 
-  var heartbeatResponse = createHeartbeatResponse(inputData.session_id, newHeartbeatData, sharedKey);
-  logger.verbose('New heartbeat response', heartbeatResponse);
+  let heartbeatResponse = createHeartbeatResponse(inputData.session_id, newHeartbeatData, sharedKey);
+  logger.verbose('New heartbeat response', JSON.stringify(heartbeatResponse));
 
   return {
     sessionConfig: sessionConfig,
@@ -91,10 +89,10 @@ function getHitCounter(sessions, session_id) {
 
 function refreshActiveSessions(inputData, storage, heartbeat_data) {
   if (inputData.sessions == null) return {};
-  var active_sessions = {}
+  let active_sessions = {};
 
   for (sessionId of Object.keys(inputData.sessions)) {
-    var session = inputData.sessions[sessionId];
+    let session = inputData.sessions[sessionId];
     if (!timeExceeded(session.timestamp, heartbeat_data.heartbeat_cycle,
         heartbeat_data.cycle_upper_tolerance, inputData.new_timestamp)) {
       active_sessions[sessionId] = session;
@@ -107,7 +105,7 @@ function refreshActiveSessions(inputData, storage, heartbeat_data) {
 }
 
 function sessionLimitExceeded(inputData) {
-  var sessionIds = Object.keys(inputData.sessions)
+  let sessionIds = Object.keys(inputData.sessions)
     .filter(checkingThresholdSatisfied(inputData.sessions, inputData.checking_threshold))
     .sort(compareSessionsByStartedAt(inputData.sessions));
 
@@ -134,8 +132,8 @@ function checkingThresholdSatisfied(sessions, checkingThreshold) {
 
 function compareSessionsByStartedAt(sessions) {
   return function (sessionId1, sessionId2) {
-    var time1 = (new Date(sessions[sessionId1].started_at)).getTime();
-    var time2 = (new Date(sessions[sessionId2].started_at)).getTime();
+    let time1 = (new Date(sessions[sessionId1].started_at)).getTime();
+    let time2 = (new Date(sessions[sessionId2].started_at)).getTime();
 
     if (time1 < time2) return -1;
     if (time1 > time2) return 1;
@@ -144,7 +142,7 @@ function compareSessionsByStartedAt(sessions) {
 }
 
 function createHeartbeatResponse(sessionId, heartbeatData, sharedKey) {
-  var modifiedHeartbeatData = {
+  let modifiedHeartbeatData = {
     user_id: heartbeatData.user_id,
     session_id: sessionId,
     asset_id: heartbeatData.asset_id,
@@ -186,16 +184,8 @@ function needsToCreateNewSession(sessionId, sessions, heartbeatData, newTimestam
   return needsToCreateNewSession;
 }
 
-function needsToSetNewSessionId(sessionId, sessions, heartbeatData, newTimestamp) {
-  return needsToCreateNewSession(sessionId, sessions, heartbeatData, newTimestamp) &&
-    (!heartbeatDataFromBackend(heartbeatData) ||
-        heartbeatDataFromBackend(heartbeatData) &&
-          !sessionMissing(sessionId, sessions)
-    );
-}
-
 function heartbeatDataFromBackend(heartbeatData) {
-  return !isDefined(heartbeatData.started_at);
+  return !isDefined(heartbeatData.session_id);
 }
 
 let isDefined = (variable) => typeof variable !== 'undefined';
