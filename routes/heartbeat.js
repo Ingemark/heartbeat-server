@@ -14,6 +14,11 @@ if (process.env.STORAGE) {
 }
 var router = express.Router();
 
+// GET /healthcheck
+router.get('/healthcheck', function (req, res) {
+  res.send(200);
+});
+
 // POST /heartbeat
 router.post('/heartbeat', async function (req, res) {
   let hb_request = {
