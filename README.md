@@ -173,5 +173,22 @@ session limit. used for tracking only real active sessions and ignoring ones tha
 * `sessions_edge` - maximum number of active sessions that can persist in local in-memory database. 
 used for preventing cache overfill while spamming heartbeat requests.
 
-After forming `heartbeat_data`, it has to be encrypted with AES (CBC mode) into `heartbeat_token` 
+After forming `heartbeat_data`, it has to be encrypted into `heartbeat_token` 
 with the same key that heartbeat server uses for encrypting `heartbeat_data`.
+
+## Encryption process
+
+* Algorithm: AES 256 CBC
+* IV - random generated 16 bytes (32 bytes when converted to hex)
+* Salt - random generated 16 bytes (32 bytes when converted to hex)
+* Key derivation function (used to generate key from passphrase) - PBKDF2
+  * Iterations: 3
+  * Hashing algorithm: SHA1
+  * Key size: 32 bytes
+* Encrypted data is being encoded in Base64 
+
+After data is encrypted, the `heartbeat_token` is created by concatenating
+ Salt (16 bytes converted in hex - 32 bytes), IV (16 bytes converted in hex - 32 bytes)
+ and AES-256-CBC encrypted data encoded with base64. Format is shown below:
+
+"[Salt (0-31 bytes)] | [IV (32-63 bytes)] | [Encrypted data (64> bytes)]"

@@ -16,7 +16,7 @@ var router = express.Router();
 
 // GET /healthcheck
 router.get('/healthcheck', function (req, res) {
-  res.send(200);
+  res.sendStatus(200);
 });
 
 // POST /heartbeat
