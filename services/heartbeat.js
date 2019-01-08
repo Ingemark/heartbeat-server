@@ -51,11 +51,11 @@ function processHeartbeatData(heartbeatData, storage, request, sharedKey) {
 }
 
 function processInputData(inputData, heartbeatData, sharedKey) {
-  var sessionConfig = {
+  let sessionConfig = {
     timestamp: inputData.new_timestamp,
     hit_counter: getHitCounter(inputData.sessions, inputData.session_id) + 1
   };
-  var newHeartbeatData = Object.assign({}, heartbeatData);
+  let newHeartbeatData = Object.assign({}, heartbeatData);
   newHeartbeatData.timestamp = inputData.new_timestamp;
 
   if (needsToCreateNewSession(inputData.session_id, inputData.sessions,
@@ -224,7 +224,10 @@ function heartbeatNotExpected(timestamp, receivedTimestamp) {
 }
 
 function heartbeatReceivedTooEarly(timestamp, newTimestamp, heartbeatCycle) {
-  return ((new Date(newTimestamp)).getTime() - (new Date(timestamp)).getTime()) < +heartbeatCycle * 1000;
+  let isTooEarly = ((new Date(newTimestamp)).getTime() - (new Date(timestamp)).getTime()) < +heartbeatCycle * 1000;
+  if (isTooEarly) logger.verbose('Heartbeat received too early (deltaT in millis)', isTooEarly);
+
+  return isTooEarly;
 }
 
 function timeExceeded(timestamp, heartbeatCycle, cycleUpperTolerance, timeNow) {
@@ -234,4 +237,4 @@ function timeExceeded(timestamp, heartbeatCycle, cycleUpperTolerance, timeNow) {
 
 module.exports = {
   processRequest: processRequest
-}
+};
