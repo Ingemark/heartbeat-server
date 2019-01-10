@@ -1,6 +1,6 @@
-var uuid = require('uuid/v4');
-var cryptoAES = require('../utils/cryptoAES');
-var logger = require('../utils/logger');
+let uuid = require('uuid/v4');
+let cryptoAES = require('../utils/cryptoAES');
+let logger = require('../utils/logger');
 
 function processRequest(request, storage, timeNowISOString, sharedKey) {
   let heartbeat_data;
@@ -34,7 +34,7 @@ function processHeartbeatData(heartbeatData, storage, request, sharedKey) {
     refreshActiveSessions(inputData, storage, heartbeatData);
     logger.verbose('Active sessions', JSON.stringify(inputData.sessions));
 
-    if (sessionLimitExceeded(inputData)) return activeSessionLimitExceededResponse();
+    if (sessionLimitExceeded(inputData, heartbeatData.reject_strategy)) return activeSessionLimitExceededResponse();
 
     let outputData = processInputData(inputData, heartbeatData, sharedKey);
 
@@ -104,10 +104,10 @@ function refreshActiveSessions(inputData, storage, heartbeat_data) {
   inputData.sessions = active_sessions;
 }
 
-function sessionLimitExceeded(inputData) {
+function sessionLimitExceeded(inputData, rejectStrategy) {
   let sessionIds = Object.keys(inputData.sessions)
     .filter(checkingThresholdSatisfied(inputData.sessions, inputData.checking_threshold))
-    .sort(compareSessionsByStartedAt(inputData.sessions));
+    .sort(compareSessionsByStartedAt(inputData.sessions, rejectStrategy));
 
   let sessionsEdgeExceeded = Object.keys(inputData.sessions).length > +inputData.sessions_edge;
   let sessionOverLimit = sessionIds.indexOf(inputData.session_id) >= +inputData.session_limit;
@@ -130,15 +130,29 @@ function checkingThresholdSatisfied(sessions, checkingThreshold) {
   };
 }
 
-function compareSessionsByStartedAt(sessions) {
+function compareSessionsByStartedAt(sessions, rejectStrategy) {
   return function (sessionId1, sessionId2) {
     let time1 = (new Date(sessions[sessionId1].started_at)).getTime();
     let time2 = (new Date(sessions[sessionId2].started_at)).getTime();
 
-    if (time1 < time2) return -1;
-    if (time1 > time2) return 1;
-    return 0;
+    if (rejectStrategy === 'MOST_RECENT') return orderLeastRecentFirst(time1, time2);
+    else if (rejectStrategy === 'LEAST_RECENT') return orderMostRecentFirst(time1, time2);
+    else return orderMostRecentFirst(time1, time2);
   }
+}
+
+function orderLeastRecentFirst(time1, time2) {
+  if (time1 < time2) return -1;
+  if (time1 > time2) return 1;
+
+  return 0;
+}
+
+function orderMostRecentFirst(time1, time2) {
+  if (time1 > time2) return -1;
+  if (time1 < time2) return 1;
+
+  return 0;
 }
 
 function createHeartbeatResponse(sessionId, heartbeatData, sharedKey) {
@@ -147,13 +161,15 @@ function createHeartbeatResponse(sessionId, heartbeatData, sharedKey) {
     session_id: sessionId,
     asset_id: heartbeatData.asset_id,
     heartbeat_cycle: heartbeatData.heartbeat_cycle,
+    reject_strategy: heartbeatData.reject_strategy,
+    cycle_lower_tolerance: heartbeatData.cycle_lower_tolerance,
     cycle_upper_tolerance: heartbeatData.cycle_upper_tolerance,
     session_limit: heartbeatData.session_limit,
     checking_threshold: heartbeatData.checking_threshold,
     sessions_edge: heartbeatData.sessions_edge,
     started_at: heartbeatData.started_at,
     timestamp: heartbeatData.timestamp
-  }
+  };
 
   return { heartbeat_token: cryptoAES.encrypt(modifiedHeartbeatData, sharedKey) };
 }
@@ -167,7 +183,7 @@ function needsToCreateNewSession(sessionId, sessions, heartbeatData, newTimestam
     heartbeatNotExpected(session.timestamp, heartbeatData.timestamp) : false;
   let hbReceivedTooEarly = session ?
     heartbeatReceivedTooEarly(session.timestamp, newTimestamp,
-    heartbeatData.heartbeat_cycle) : false;
+    heartbeatData.heartbeat_cycle, heartbeatData.cycle_lower_tolerance) : false;
 
   let needsToCreateNewSession = hbDataFromBackend ||
     hbSessionMissing || hbNotExpected || hbReceivedTooEarly;
@@ -220,12 +236,13 @@ function sessionMissing(sessionId, sessions) {
 }
 
 function heartbeatNotExpected(timestamp, receivedTimestamp) {
-  return (new Date(timestamp)).getTime() != (new Date(receivedTimestamp)).getTime();
+  return (new Date(timestamp)).getTime() !== (new Date(receivedTimestamp)).getTime();
 }
 
-function heartbeatReceivedTooEarly(timestamp, newTimestamp, heartbeatCycle) {
-  let isTooEarly = ((new Date(newTimestamp)).getTime() - (new Date(timestamp)).getTime()) < +heartbeatCycle * 1000;
-  if (isTooEarly) logger.verbose('Heartbeat received too early (deltaT in millis)', isTooEarly);
+function heartbeatReceivedTooEarly(timestamp, newTimestamp, heartbeatCycle, cycleLowerTolerance) {
+  let deltaT = (new Date(newTimestamp)).getTime() - (new Date(timestamp)).getTime();
+  let isTooEarly = deltaT < +heartbeatCycle * 1000 - +cycleLowerTolerance * 1000;
+  if (isTooEarly) logger.verbose('Heartbeat received too early', {deltaTms: deltaT});
 
   return isTooEarly;
 }

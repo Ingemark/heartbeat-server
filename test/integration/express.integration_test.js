@@ -21,6 +21,7 @@ describe('POST /heartbeat', function () {
       asset_id: faker.random.number(1000),
       session_id: faker.random.uuid(),
       heartbeat_cycle: heartbeat_cycle,
+      cycle_lower_tolerance: 0.8,
       cycle_upper_tolerance: 4,
       timestamp: (new Date()).toISOString(),
       session_limit: 1,

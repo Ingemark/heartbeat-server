@@ -149,14 +149,16 @@ Client sends request to backend in order to get resource URL of playable content
 
 ```
 heartbeat_data = {
-    "user_id": 13, 
-    "asset_id": 14,
-    "heartbeat_cycle": 3,
-    "cycle_upper_tolerance": 2,
-    "timestamp": "2018-06-05T16:16:14.418Z",
-    "session_limit": 1,
-    "checking_threshold": 3,
-    "sessions_edge": 10
+    "user_id": 13, // int
+    "asset_id": 14, // int
+    "heartbeat_cycle": 3, // decimal
+    "reject_strategy": "LEAST_RECENT", // string
+    "cycle_lower_tolerance": 0.3, // decimal
+    "cycle_upper_tolerance": 0.8, // decimal
+    "timestamp": "2018-06-05T16:16:14.418Z", // string
+    "session_limit": 1, // int
+    "checking_threshold": 3, // int
+    "sessions_edge": 10 // int
 }
 ```
 
@@ -165,6 +167,8 @@ heartbeat_data = {
 * `user_id` - represents user identifier in database.
 * `asset_id` - playable resource identifier in database.
 * `heartbeat_cycle` - number of seconds which represents a period of sending heartbeat requests
+* `reject_strategy` - strategy for rejecting users. supported strategies: ['LEAST_RECENT', 'MOST_RECENT']
+* `cycle_lower_tolerance` - number of seconds which represents time tolerance on receiving heartbeat request before time set in `heartbeat_cycle`.
 * `cycle_upper_tolerance` - number of seconds which represents time tolerance on receiving heartbeat request after time set in `heartbeat_cycle`.
 * `timestamp` - time of sending heartbeat in ISO 8601 format (Combined date and time representation).
 * `session_limit` - number of allowed parallel active sessions for particular user.
