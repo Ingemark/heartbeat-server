@@ -1,10 +1,15 @@
+
 # Heartbeat Server
+
+[![Build Status](https://travis-ci.com/Ingemark/heartbeat-server.svg?branch=master)](https://travis-ci.com/Ingemark/heartbeat-server)
+
+--- 
 
 Component used for OTT applications to limit the number of parallel streaming
 sessions per registered user, remember the progress where user stopped last time and
 provide data to analyze detailed play history.
 
-##Development
+## Development
 ### Requirements
 
 - `nodejs`, version **8.10.0**+
