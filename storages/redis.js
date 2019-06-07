@@ -4,7 +4,7 @@ var logger = require('../utils/logger');
 let redis_client_opts = {};
 redis_client_opts.url = process.env.REDIS_URL || 'redis://127.0.0.1:6379';
 if (process.env.PASSWORD) redis_client_opts.password = process.env.PASSWORD;
-if (redis_client_opts.prefix) redis_client_opts.prefix = process.env.REDIS_NAMESPACE;
+if (process.env.REDIS_NAMESPACE) redis_client_opts.prefix = process.env.REDIS_NAMESPACE;
 
 let client = redis.createClient(redis_client_opts);
 let postActionsBuffer = [];
